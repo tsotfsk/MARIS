@@ -1,0 +1,9 @@
+dataset/*/
+saved/*
+openke/*
+scripts/*
+*.csv
+*.png
+*.npy
+*.pyc
+*.ipynb
