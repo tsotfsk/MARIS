@@ -15,3 +15,4 @@ gunzip reviews_$dataset.json.gz
 # exit
 cd ..
 python preprocess.py --dataset $dataset
+python generate_candidate.py --dataset $dataset
