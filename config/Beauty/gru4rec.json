@@ -2,16 +2,15 @@
     "epochs": 100,
     "train_batch_size": 256,
     "eval_batch_size": 1024,
-    "negative_sample": 1,
+    "sample_strategy": "sample_sort_bpr",
+    "num_workers": 0,
     "optimizer": "Adam",
     "learning_rate": 3e-3,
     "weight_decay": 0.0,
     "early_stop": 10,
     "device": 0,
-    "version": -1,
     "metrics": [
         "Recall",
-        "MRR",
         "NDCG"
     ],
     "main_metric": "Recall@10",
@@ -22,8 +21,6 @@
     "model_param": {
         "embedding_size": 128,
         "hidden_size": 128,
-        "loadpath": "./dataset/Beauty/",
-        "dataset": "Beauty"
-    },
-    "grid_search": {}
+        "num_layers": 1
+    }
 }

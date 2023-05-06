@@ -1,7 +1,6 @@
 from trainer.metric import HR, MAP, NDCG, MRR, Recall, Precision
-from trainer.learner import BaseLearner, RACELearner
-from trainer.dataloader import SequentialDataLoader
-from trainer.evaluator import Evaluator
+from trainer.learner import BaseLearner, RLLearner
+from trainer.dataloader import SequentialDataLoader, SequentialDataset, SequentialInput
 
 metric_dict = {
     'hr': HR(),
@@ -14,4 +13,6 @@ metric_dict = {
 
 learner_dict = {
     'GRU4Rec': BaseLearner,
+    'GRU4RecF': BaseLearner,
+    'MARIS': RLLearner,
 }

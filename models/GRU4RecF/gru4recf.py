@@ -1,68 +1,38 @@
+import os
 import pickle
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.init import xavier_normal_, xavier_uniform_, normal_
-import os
+from models.abstract_model import SequentialModel
+from torch.nn.init import normal_, xavier_normal_, xavier_uniform_
+from utils import MODAL_PATH_DICT
 
 
-class BPRLoss(nn.Module):
-    """ BPRLoss, based on Bayesian Personalized Ranking
 
-    Args:
-        - gamma(float): Small value to avoid division by zero
+class GRU4RecF(SequentialModel):
+    def __init__(self, config, logger):
+        super(GRU4RecF, self).__init__(config, logger)
 
-    Shape:
-        - Pos_score: (N)
-        - Neg_score: (N), same shape as the Pos_score
-        - Output: scalar.
+        self.embedding_size = self.model_param.embedding_size
+        self.hidden_size = self.model_param.hidden_size
+        self.num_layers = self.model_param.num_layers
+        self.freeze_embedding = self.model_param.freeze_embedding
+        self.dropout = self.model_param.dropout
 
-    Examples::
-
-        >>> loss = BPRLoss()
-        >>> pos_score = torch.randn(3, requires_grad=True)
-        >>> neg_score = torch.randn(3, requires_grad=True)
-        >>> output = loss(pos_score, neg_score)
-        >>> output.backward()
-    """
-
-    def __init__(self, gamma=1e-10):
-        super(BPRLoss, self).__init__()
-        self.gamma = gamma
-
-    def forward(self, pos_score, neg_score):
-        loss = -torch.log(self.gamma + torch.sigmoid(pos_score - neg_score)).mean()
-        return loss
-
-
-class GRU4RecF(nn.Module):
-    def __init__(self, embedding_size=64, hidden_size=128, num_layers=1,
-                 freeze_embedding=True, loadpath='', dataset='Beauty', dropout=0.3):
-        super(GRU4RecF, self).__init__()
-
-        # load parameters info
-        self.dataset = dataset
-        self.loadpath = loadpath
-
-        self.embedding_size = embedding_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.freeze_embedding = freeze_embedding
-
-        self.n_items = self.load_info()
 
         # load embedding
         self.bsc_embedding = nn.Embedding(
-            self.n_items + 1, self.embedding_size, padding_idx=0)
+            self.item_num + 1, self.embedding_size, padding_idx=0)
+        
         self.img_embedding = nn.Embedding(
-            self.n_items + 1, 128, padding_idx=0)
+                self.item_num + 1, 128, padding_idx=0)
         self.txt_embedding = nn.Embedding(
-            self.n_items + 1, 128, padding_idx=0)
+                self.item_num + 1, 128, padding_idx=0)
         self.ent_embedding = nn.Embedding(
-            self.n_items + 1, 128, padding_idx=0)
-        self.dropout = nn.Dropout(dropout)
+                self.item_num + 1, 128, padding_idx=0)
+        self.dropout = nn.Dropout(self.dropout)
 
         self.bsc_gru = nn.GRU(
             input_size=self.embedding_size,
@@ -81,12 +51,10 @@ class GRU4RecF(nn.Module):
         )
 
         self.dense = nn.Linear(self.hidden_size * 2, self.embedding_size)
-        self.loss_fct = BPRLoss()
 
         self.apply(self._init_weights)
         self.load_embedding()
 
-        # parameters initialization
 
     def _init_weights(self, module):
         if isinstance(module, nn.Embedding):
@@ -99,46 +67,32 @@ class GRU4RecF(nn.Module):
             if module.bias is not None:
                 module.bias.data.fill_(0.0)
 
-    def load_info(self):
-        pathname = os.path.join(self.loadpath, f'{self.dataset}_info.pkl')
-        with open(pathname, 'rb') as f:
-            info = pickle.load(f)
-        return info['item_num']
-
-    @property
-    def modal2file(self):
-        return {
-            'ent': os.path.join(self.loadpath, 'pretrain', f'{self.dataset}_ent.npy'),
-            'img': os.path.join(self.loadpath, 'pretrain', f'{self.dataset}_img.npy'),
-            'txt': os.path.join(self.loadpath, 'pretrain', f'{self.dataset}_txt.npy')
-        }
-
     @torch.no_grad()
     def load_embedding(self, normalize=True):
         for modal in ['ent', 'img', 'txt']:
-            embed = np.load(self.modal2file[modal])
+            embed = np.load(MODAL_PATH_DICT[modal].format(dataset=self.dataset))
             embed = torch.from_numpy(embed)
             if normalize:
                 embed = F.normalize(embed, p=2, dim=1)
             weight = getattr(self, f"{modal}_embedding").weight
-            weight[1:].copy_(embed[:self.n_items])
+            weight[1:].copy_(embed[:self.item_num])
             if self.freeze_embedding:
                 weight.requires_grad = False
 
-    def gen_user_embedding(self, user_seqs, seq_lens):
-        bsc_embed = self.dropout(self.bsc_embedding(user_seqs))
-        img_embed = self.dropout(self.img_embedding(user_seqs))
-        txt_embed = self.dropout(self.txt_embedding(user_seqs))
-        ent_embed = self.dropout(self.ent_embedding(user_seqs))
+    def get_user_embedding(self, item_seq_id, item_seq_len):
+        bsc_embed = self.dropout(self.bsc_embedding(item_seq_id))
+        img_embed = self.dropout(self.img_embedding(item_seq_id))
+        txt_embed = self.dropout(self.txt_embedding(item_seq_id))
+        ent_embed = self.dropout(self.ent_embedding(item_seq_id))
 
         bsc_ht, _ = self.bsc_gru(bsc_embed)
         fea_ht, _ = self.fea_gru(torch.cat((img_embed, txt_embed, ent_embed), dim=-1))
         ht = torch.cat((bsc_ht, fea_ht), dim=-1)
-        out = self.gather_indexes(ht, seq_lens - 1)
+        out = self.gather_indexes(ht, item_seq_len - 1)
         result = self.dense(out)
         return result
 
-    def gen_item_embedding(self):
+    def get_item_embedding(self):
         return self.bsc_embedding.weight
 
     def gather_indexes(self, output, gather_index):
@@ -147,41 +101,33 @@ class GRU4RecF(nn.Module):
         output_tensor = output.gather(dim=1, index=gather_index)
         return output_tensor.squeeze(1)
 
-    def forward(self, user_seqs, seq_lens):
-        return self.gen_user_embedding(user_seqs, seq_lens)
+    def forward(self, item_seq_id, item_seq_len):
+        return self.get_user_embedding(item_seq_id, item_seq_len)
 
     def calculate_loss(self, input):
-        user_seqs = input.user_seqs
-        seq_lens = input.seq_lens
-        target_ids = input.target_ids
-        neg_ids = input.neg_ids
+        item_seq_id = input.item_seq_id
+        item_seq_len = input.item_seq_len
+        pos_item_id = input.pos_item_id
+        neg_item_id = input.neg_item_id
 
-        user_embed = self.forward(user_seqs, seq_lens)
+        user_embed = self.forward(item_seq_id, item_seq_len)
 
-        test_item_emb = self.gen_item_embedding()
-        scores = torch.matmul(user_embed, test_item_emb.t())
+        test_item_emb = self.get_item_embedding()
 
-        neg_embed = test_item_emb[neg_ids]
-        pos_embed = test_item_emb[target_ids]
+        neg_embed = test_item_emb[neg_item_id]  # [B, E]
+        pos_embed = test_item_emb[pos_item_id]
 
         pos_score = torch.sum(user_embed * pos_embed, dim=-1)  # [B]
-        neg_score = torch.sum(user_embed * neg_embed, dim=-1)  # [B]
+        neg_score = torch.sum(user_embed.unsqueeze(1) * neg_embed, dim=-1)  # [B]
         loss = self.loss_fct(pos_score, neg_score)
 
         return loss
 
     def predict(self, input):
-        user_seqs = input.user_seqs
-        seq_lens = input.seq_lens
+        item_seq_id = input.item_seq_id
+        item_seq_len = input.item_seq_len
 
-        user_embed = self.forward(user_seqs, seq_lens)
-        item_embed = self.gen_item_embedding()
-        scores = torch.matmul(user_embed, item_embed.t())
+        user_embed = self.forward(item_seq_id, item_seq_len)
+        item_embed = self.get_item_embedding()
+        scores = user_embed @ item_embed.t()
         return scores
-
-    def freeze(self):
-        for param in self.parameters():
-            param.requires_grad = False
-
-    def __str__(self):
-        return self.__class__.__name__
