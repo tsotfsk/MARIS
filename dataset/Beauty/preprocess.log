@@ -1,0 +1,47 @@
+2021-12-27 16:09:47.860: build_dataset done
+2021-12-27 16:09:49.529: process k core start...
+2021-12-27 16:09:52.458: user_sum 469771 item_sum 1712558
+2021-12-27 16:09:52.788: user_sum 353962 item_sum 313823
+2021-12-27 16:09:52.975: user_sum 242565 item_sum 276660
+2021-12-27 16:09:53.126: user_sum 230481 item_sum 224229
+2021-12-27 16:09:53.264: user_sum 210145 item_sum 217659
+2021-12-27 16:09:55.086: user_sum 207432 item_sum 205760
+2021-12-27 16:09:55.215: user_sum 202006 item_sum 204146
+2021-12-27 16:09:55.341: user_sum 201280 item_sum 200771
+2021-12-27 16:09:55.468: user_sum 199652 item_sum 200355
+2021-12-27 16:09:55.593: user_sum 199460 item_sum 199277
+2021-12-27 16:09:55.718: user_sum 198889 item_sum 199125
+2021-12-27 16:09:55.845: user_sum 198809 item_sum 198741
+2021-12-27 16:09:55.971: user_sum 198606 item_sum 198705
+2021-12-27 16:09:56.097: user_sum 198590 item_sum 198554
+2021-12-27 16:09:56.222: user_sum 198514 item_sum 198546
+2021-12-27 16:09:56.348: user_sum 198514 item_sum 198506
+2021-12-27 16:09:56.477: user_sum 198502 item_sum 198506
+2021-12-27 16:09:56.606: user_sum 198502 item_sum 198502
+2021-12-27 16:09:56.625: process k core done...
+2021-12-27 16:09:57.865: sort data by [user_id, timestamp] done...
+2021-12-27 16:09:57.903: remap id done...
+2021-12-27 16:09:57.904: number of users: 22363
+2021-12-27 16:09:57.904: number of items: 12101
+2021-12-27 16:09:57.904: number of inters: 198502
+2021-12-27 16:10:26.334: base kg edges 902794
+2021-12-27 16:10:26.657: the shape of dataframe after drop dups(577869, 3)
+2021-12-27 16:10:26.708: the edge of different_rels rel
+also_bought        371255
+also_viewed         95326
+belong_to           75310
+bought_together     15942
+product             20036
+Name: rel, dtype: int64
+2021-12-27 16:10:26.710: the number of item entitys 12101
+2021-12-27 16:10:26.754: the number of other entitys 2321
+2021-12-27 16:10:26.797: the number of rels 5
+2021-12-27 16:10:29.486: the number of all entitys 14422
+2021-12-27 16:10:29.486: the number of edges 577869
+2021-12-27 16:10:29.486: the average degree 40.06857578699209
+2021-12-27 16:15:25.727: load image done
+2021-12-27 16:15:25.727: the number of items with image 12009
+2021-12-27 16:15:53.386: load text done
+2021-12-27 16:15:53.387: the number of items with description 12094
+2021-12-27 16:15:53.387: train word2vec...
+2021-12-27 16:16:29.664: train word2vec done.
