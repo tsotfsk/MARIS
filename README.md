@@ -1,3 +1,14 @@
 # MARIS
 
-The code of maris will be updated within two weeks.
+
+"multi-agent rl based inforamtion selection model for sequential recommendation"
+
+
+> Data Process
+```shell
+bash download.sh Beauty
+```
+> Run the model
+```shell
+python run.py --dataset=Beauty --model=MARIS
+```

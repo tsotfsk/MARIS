@@ -1,0 +1,36 @@
+{
+    "epochs": 100,
+    "train_batch_size": 256,
+    "eval_batch_size": 1024,
+    "sample_strategy": "sample_sort_bpr",
+    "num_workers": 0,
+    "optimizer": "Adam",
+    "learning_rate": 1e-3,
+    "weight_decay": 1e-5,
+    "early_stop": 10,
+    "device": 0,
+    "metrics": [
+        "Recall",
+        "NDCG"
+    ],
+    "main_metric": "Recall@10",
+    "topk": [
+        5,
+        10
+    ],
+    "model_param": {
+        "embedding_size": 128,
+        "hidden_size": 128,
+        "num_layers": 1,
+        "freeze_embedding": true,
+        "dropout": 0.3,
+        "alpha": 0.4,
+        "gamma": 0.99,
+        "epsilon_start": 1.0,
+        "epsilon_finish": 0.05,
+        "epsilon_anneal_time": 50000,
+        "hypernet_layers": 2,
+        "sample_num": 5,
+        "agent_num": 3
+    }
+}

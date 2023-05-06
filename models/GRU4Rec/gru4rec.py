@@ -4,57 +4,21 @@ import pickle
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from models.abstract_model import SequentialModel
 from torch.nn.init import normal_, xavier_normal_, xavier_uniform_
 
 
-class BPRLoss(nn.Module):
-    """ BPRLoss, based on Bayesian Personalized Ranking
-
-    Args:
-        - gamma(float): Small value to avoid division by zero
-
-    Shape:
-        - Pos_score: (N)
-        - Neg_score: (N), same shape as the Pos_score
-        - Output: scalar.
-
-    Examples::
-
-        >>> loss = BPRLoss()
-        >>> pos_score = torch.randn(3, requires_grad=True)
-        >>> neg_score = torch.randn(3, requires_grad=True)
-        >>> output = loss(pos_score, neg_score)
-        >>> output.backward()
-    """
-
-    def __init__(self, gamma=1e-10):
-        super(BPRLoss, self).__init__()
-        self.gamma = gamma
-
-    def forward(self, pos_score, neg_score):
-        loss = -torch.log(self.gamma + torch.sigmoid(pos_score - neg_score)).mean()
-        return loss
-
-
-class GRU4Rec(nn.Module):
-    def __init__(self, embedding_size=128, hidden_size=128, num_layers=1,
-                loadpath='', dataset='Beauty'):
-        super(GRU4Rec, self).__init__()
-
+class GRU4Rec(SequentialModel):
+    def __init__(self, config, logger):
+        super().__init__(config, logger)
+        
         # load parameters info
-        self.dataset = dataset
-        self.loadpath = loadpath
+        self.embedding_size = self.model_param.embedding_size
+        self.hidden_size = self.model_param.hidden_size
+        self.num_layers = self.model_param.num_layers
 
-        self.embedding_size = embedding_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
-
-        self.n_items = self.load_info()
-
-        # load embedding
         self.bsc_embedding = nn.Embedding(
-            self.n_items + 1, self.embedding_size, padding_idx=0)
+            self.item_num + 1, self.embedding_size, padding_idx=0)
 
         self.gru_layers = nn.GRU(
             input_size=self.embedding_size,
@@ -65,7 +29,6 @@ class GRU4Rec(nn.Module):
         )
 
         self.dense = nn.Linear(self.hidden_size, self.embedding_size)
-        self.loss_fct = BPRLoss()
 
         self.apply(self._init_weights)
 
@@ -80,17 +43,11 @@ class GRU4Rec(nn.Module):
             if module.bias is not None:
                 module.bias.data.fill_(0.0)
 
-    def load_info(self):
-        pathname = os.path.join(self.loadpath, f'{self.dataset}_info.pkl')
-        with open(pathname, 'rb') as f:
-            info = pickle.load(f)
-        return info['item_num']
-
-    def gen_user_embedding(self, user_seqs, seq_lens):
-        seqs_embed = self.bsc_embedding(user_seqs)
+    def get_user_embedding(self, item_seq_id, item_seq_len):
+        seqs_embed = self.bsc_embedding(item_seq_id)
         ht, _ = self.gru_layers(seqs_embed)
 
-        out = self.gather_indexes(ht, seq_lens - 1)
+        out = self.gather_indexes(ht, item_seq_len - 1)
         result = self.dense(out)
         return result
 
@@ -100,44 +57,33 @@ class GRU4Rec(nn.Module):
         output_tensor = output.gather(dim=1, index=gather_index)
         return output_tensor.squeeze(1)
 
-    def gen_item_embedding(self):
+    def get_item_embedding(self):
         result = self.bsc_embedding.weight
         return result
 
-    def forward(self, user_seqs, seq_lens):
-        seqs_embed = self.bsc_embedding(user_seqs)
-        return self.gen_user_embedding(seqs_embed, seq_lens)
+    def forward(self, item_seq_id, item_seq_len):
+        seqs_embed = self.bsc_embedding(item_seq_id)
+        return self.get_user_embedding(seqs_embed, item_seq_len)
 
     def calculate_loss(self, input):
-        user_seqs = input.user_seqs
-        seq_lens = input.seq_lens
-        target_ids = input.target_ids
-        neg_ids = input.neg_ids
+        item_seq_id = input.item_seq_id
+        item_seq_len = input.item_seq_len
+        pos_item_id = input.pos_item_id
+        neg_item_id = input.neg_item_id
 
-        user_embed = self.gen_user_embedding(user_seqs, seq_lens)
-        item_embed = self.gen_item_embedding()
-        scores = torch.matmul(user_embed, item_embed.t())
-        neg_embed = self.bsc_embedding(neg_ids)
-        pos_embed = self.bsc_embedding(target_ids)
+        user_embed = self.get_user_embedding(item_seq_id, item_seq_len)  # [B, E]
+        neg_embed = self.bsc_embedding(neg_item_id)  # [B, E]
+        pos_embed = self.bsc_embedding(pos_item_id)  # [B, E]
         pos_score = torch.sum(user_embed * pos_embed, dim=-1)  # [B]
-        neg_score = torch.sum(user_embed * neg_embed, dim=-1)  # [B]
+        neg_score = torch.sum(user_embed.unsqueeze(1) * neg_embed, dim=-1)  # [B]
         loss = self.loss_fct(pos_score, neg_score)
         return loss
 
     def predict(self, input):
-        user_seqs = input.user_seqs
-        seq_lens = input.seq_lens
+        item_seq_id = input.item_seq_id
+        item_seq_len = input.item_seq_len
 
-        user_embed = self.gen_user_embedding(user_seqs, seq_lens)
-        item_embed = self.gen_item_embedding()
-        scores = torch.matmul(user_embed, item_embed.t())
-        # scores = torch.matmul(F.normalize(user_embed, dim=1),
-        #                       F.normalize(item_embed.t(), dim=0))
+        user_embed = self.get_user_embedding(item_seq_id, item_seq_len)
+        item_embed = self.get_item_embedding()
+        scores = user_embed @ item_embed.t()
         return scores
-
-    def freeze(self):
-        for param in self.parameters():
-            param.requires_grad = False
-
-    def __str__(self):
-        return self.__class__.__name__

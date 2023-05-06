@@ -3,23 +3,21 @@ import numpy as np
 from collections import namedtuple
 import sys
 import os
-
-sys.path.append('..')
+from utils import NEG_ITEM_ID
 
 
 class Evaluator(object):
 
-    def __init__(self, metrics=None, topk=[5], case_study=False, savepath=None):
+    def __init__(self, metrics=None, topk=[5]):
         self.topk = topk
         self.metrics = metrics
-        self.savepath = savepath
 
     def collect(self, scores, input):
         # if use test sample, just rank the test samples
-        if hasattr(input, "neg_ids"):
-            cand_ids = torch.cat((input.target_ids.unsqueeze(1), input.neg_ids), dim=1)
-            scores.scatter_add_(1, cand_ids, torch.full_like(
-                cand_ids, 1000, device=cand_ids.device, dtype=torch.float32))
+        if hasattr(input, NEG_ITEM_ID):
+            cand_id = torch.cat((input.pos_item_id.unsqueeze(1), input.neg_item_id), dim=1)
+            scores.scatter_add_(1, cand_id, torch.full_like(
+                cand_id, 1000, device=cand_id.device, dtype=torch.float32))
 
         # mask history items
         # scores.scatter_(1, input.user_seqs, -np.inf)
@@ -32,7 +30,7 @@ class Evaluator(object):
 
         # pos_idx
         target_mask = torch.zeros_like(scores, device=scores.device)
-        target_mask.scatter_(1, input.target_ids.unsqueeze(1), 1)
+        target_mask.scatter_(1, input.pos_item_id.unsqueeze(1), 1)
         pos_idx = target_mask.gather(dim=1, index=topk_idx)
 
         # pos_len
@@ -47,8 +45,6 @@ class Evaluator(object):
         metrics_dict = {}
         result_matrix = self._calculate_metrics(pos_idx, pos_len)
         result_lst = np.stack(result_matrix, axis=0)
-        with open(os.path.join(self.savepath, 'result.npy'), 'wb') as f:
-            np.save(f, result_lst)
         result_lst = result_lst.mean(axis=1)
         for metric, value in zip(self.metrics, result_lst):
             for k in self.topk:
